@@ -1,6 +1,7 @@
 """화면에서 쓰는 계산 로직 (날씨 수집 → 캠퍼스 체감 → 옷차림 분류 → 결과 묶기)."""
 from __future__ import annotations
 
+import math
 import os
 import time
 from datetime import date, datetime, timedelta
@@ -15,6 +16,11 @@ from feels_like import campus_feels_like
 from weather import get_forecast
 
 WEEKDAYS = "월화수목금토일"
+
+
+def r0(x: float) -> int:
+    """사사오입 반올림 (화면 JS의 Math.round 와 같게 — 파이썬 round는 8.5→8)."""
+    return math.floor(x + 0.5)
 _cache = {"fc": None, "at": 0.0}
 _model = {"clf": None, "loaded": False}
 
@@ -91,7 +97,7 @@ def home() -> dict:
     return {
         "campus": config.CAMPUS_NAME,
         "now_label": korean_datetime(now),
-        "app_temp": round(app_now),
+        "app_temp": r0(app_now),
         "app_label": label,
         "source": fc.source,
         "errors": fc.errors,
@@ -109,7 +115,7 @@ def home() -> dict:
 # ---------------- AI 분석 ----------------
 
 def _ai_comment(app_t, feels_t, worst_hour, cats, hourly):
-    diff = round(app_t - feels_t)
+    diff = r0(app_t - feels_t)
     if diff >= 1:
         head = f"날씨앱만 보고 얇게 입으면 후회해요! 언덕 위 캠퍼스는 날씨앱보다 {diff}° 더 춥게 느껴져요. "
     elif diff <= -1:
@@ -204,9 +210,9 @@ def analyze(day: str, schedule: str, sensitivity: str) -> dict:
         },
         "result": {
             "hour": worst["hour"],
-            "feels": round(cf.personal),
-            "app": round(cf.app_temp),
-            "diff": round(cf.app_temp - cf.personal),
+            "feels": r0(round(cf.personal, 1)),  # 차트(소수 1자리)와 같은 값에서 반올림
+            "app": r0(cf.app_temp),
+            "diff": r0(cf.app_temp - cf.personal),
             "altitude": round(cf.altitude_delta, 1),
             "wind": round(cf.wind_delta, 1),
             "sensitivity": round(cf.sensitivity_delta, 1),

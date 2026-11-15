@@ -11,7 +11,8 @@ import outfit
 import service
 import shop
 
-app = Flask(__name__, static_folder="static")
+# 화면 파일은 docs/ (GitHub Pages와 같은 폴더) — model.js 등을 루트 경로로 제공
+app = Flask(__name__, static_folder="docs", static_url_path="")
 
 
 @app.get("/")

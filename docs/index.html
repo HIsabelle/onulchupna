@@ -311,7 +311,35 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="model.js"></script>
+<script src="standalone.js"></script>
 <script>
+// 서버(python server.py)가 있으면 서버 API, 없으면(GitHub Pages·파일 더블클릭) 브라우저 계산
+const api = {
+  server: null,
+  async detect() {
+    if (this.server !== null) return this.server;
+    try {
+      const r = await fetch("/api/home");
+      this.server = r.ok && (r.headers.get("content-type") || "").includes("json");
+    } catch { this.server = false; }
+    return this.server;
+  },
+  async post(path, body) {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  },
+  async home() { return (await this.detect()) ? (await fetch("/api/home")).json() : Standalone.home(); },
+  async analyze(b) { return (await this.detect()) ? this.post("/api/analyze", b) : Standalone.analyze(b); },
+  async feedback(b) { return (await this.detect()) ? this.post("/api/feedback", b) : Standalone.feedback(b); },
+  async products(item) {
+    return (await this.detect())
+      ? (await fetch("/api/products?item=" + encodeURIComponent(item))).json()
+      : Standalone.products(item);
+  },
+};
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const state = { day: "오늘", schedule: null, sensitivity: null, feedback: "추워요", home: null, result: null };
@@ -345,7 +373,9 @@ function renderStats(stats) {
     <div class="bar-row"><span>${k}</span>
       <div class="bar"><i style="width:${stats.pct[k]}%;background:${colors[k]}"></i></div>
       <span class="pct">${stats.pct[k]}%</span></div>`).join("");
-  $("statFoot").textContent = stats.total
+  $("statFoot").textContent = stats.local
+    ? (stats.total ? `이 기기에서 오늘 ${stats.total}건 제보했어요 (체험판은 기기별 저장)` : "체험판에서는 제보가 이 기기에만 저장돼요.")
+    : stats.total
     ? `오늘 학생 ${stats.total}명이 체감 제보에 참여했어요`
     : "오늘은 아직 제보가 없어요. 첫 제보를 남겨 주세요!";
   $("recent").innerHTML = stats.recent.length
@@ -355,7 +385,7 @@ function renderStats(stats) {
 }
 
 async function loadHome() {
-  const h = await (await fetch("/api/home")).json();
+  const h = await api.home();
   state.home = h;
   state.schedule ??= h.schedules[1];
   state.sensitivity ??= h.sensitivities[1];
@@ -406,10 +436,7 @@ function renderSteps(active, values) {
 async function analyze() {
   show("analyze");
   renderSteps(0, null);
-  const req = fetch("/api/analyze", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ day: state.day, schedule: state.schedule, sensitivity: state.sensitivity }),
-  }).then((r) => r.json());
+  const req = api.analyze({ day: state.day, schedule: state.schedule, sensitivity: state.sensitivity });
   await sleep(500);
   const data = await req;
   if (data.error) { toast(data.error); show("home"); return; }
@@ -471,7 +498,7 @@ async function loadExamples(categories) {
       return `<div class="row"><b>${esc(it.name)}</b><div id="ex${i}" class="muted">불러오는 중…</div></div>`;
     }).join("")).join("");
   items.forEach(async (name, i) => {
-    const d = await (await fetch("/api/products?item=" + encodeURIComponent(name))).json();
+    const d = await api.products(name);
     const el = $("ex" + i);
     if (d.products.length) {
       el.className = "prods";
@@ -492,13 +519,10 @@ function openReport() {
   $("reportModal").classList.add("show");
 }
 async function submitReport() {
-  const res = await fetch("/api/feedback", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ worn_level: +$("wornSelect").value, feedback: state.feedback, sensitivity: state.sensitivity }),
-  });
   $("reportModal").classList.remove("show");
-  if (!res.ok) { toast("제보 저장에 실패했어요"); return; }
-  renderStats(await res.json());
+  try {
+    renderStats(await api.feedback({ worn_level: +$("wornSelect").value, feedback: state.feedback, sensitivity: state.sensitivity }));
+  } catch { toast("제보 저장에 실패했어요"); return; }
   toast("제보 고마워요! 🙌");
 }
 
