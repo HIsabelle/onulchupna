@@ -1,0 +1,10 @@
+# API 키 — 절대 업로드 금지
+.env
+
+# 학생 제보 데이터 (개인 PC에만)
+data/feedback.csv
+
+# 학습된 모델 (36MB) — python train.py 로 다시 생성
+data/*.joblib
+
+__pycache__/
